@@ -1,0 +1,7 @@
+data <- read.csv("data_ex-07.csv",stringsAsFactors = F,row.names = 1)
+m.data <- rbind(data$Образование,data$Здравоохранение,data$Соц_политика)
+colnames(m.data) <- c('2005','2010','2013','2017')
+png(filename = 'plot-ex07.png',bg='transparent', width = 600)
+barplot(m.data, main = "Расходы республики Татарстан на соц-культурные мероприятия", col=topo.colors(3))
+legend("topleft", legend = c('Образование','Здравоохранение','Соц политика'),fill = topo.colors(3))
+dev.off()
