@@ -1,0 +1,5 @@
+source('FunctionHist9.R')
+FunctionHist(18, 300, 30, 4, 0, 13)
+dev.off()
+FunctionHist(36, 300, 30, 4, 0, 13)
+dev.off()

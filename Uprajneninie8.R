@@ -1,0 +1,5 @@
+source('FunctionPlot8.R')
+FunctionPlot(18, 300, 30, 4, 0, 13)
+dev.off()
+FunctionPlot(14, 300, 30, 4, 0, 13)
+dev.off()
