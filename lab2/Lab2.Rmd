@@ -1,0 +1,269 @@
+---
+title: "Лабораторная работа №2"
+author: "Людуховский В.В."
+date: "`r format(Sys.Date(), '%d  %B  %Y')`"
+output:  
+  word_document: 
+    reference_docx: word_styles.docx
+---
+
+```{r setup, include=FALSE}
+library(Hmisc)
+library(knitr)
+library(pander)
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Лабораторная работа №2
+Во второй лабораторной работе продолжим работу с примером данных, использовавшихся в предыдущей работе.
+Оценим параметры моделей, объясняющих поведение данного показателя несколькими факторами.
+
+## Зависимая переменная модели:
+
+* `Y` `ORT.2014` - Оборот розничной торговли на душу населения (руб.)
+
+## Независимые переменные модели:
+
+* `X1` `KMP.2014` - Число малых предприятий на 10000 человек населения (шт.)
+
+* `X2` `USEPC.2014` - Использование информационных и коммуникационных технологий в организациях: персональные компьютеры (% числа организаций, использующих эти технологии)
+
+* `X3` `Budg.2013` - Расходы консолидированных бюджетов субъектов Российской Федерации: всего (млн. руб)
+
+* `X4` `RDD.2014` - Реальные денежные доходы населения (% к пред. году)
+
+
+```{r, import, echo = FALSE}
+load('labs_ЛюдуховскийВВ_data.Rdata') #Импортируем данные из рабочего пространства, созданного в конце прошлой лаборатоной
+```
+```{r}
+#Нумерация таблиц
+table.num <- 1;
+```
+## Исходная модель:
+
+$Y = \beta_0 +\beta_1 X1 + \beta_2 X2  + \beta_3 X3 +  + \beta_4 X4$
+
+## Выполним оценку параметров модели линейной регрессии
+#### Таблица № `r table.num `
+
+```{r, echo = FALSE} 
+#Оценка параметров модели линейной регрессии
+fit.1 <- lm(ORT.2014 ~ KMP.2014 + USEPC.2014 + Budg.2013 + RDD.2014, data = reg.df)
+table.num <- table.num +1
+kable(round(summary(fit.1)$coef,4))
+```
+
+## Исколючаем из модели наименее значимый фактор RDD.2014
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Исколючаем из модели наименее значимый фактор RDD.2014
+fit.2 <- lm(ORT.2014 ~ KMP.2014 + USEPC.2014 + Budg.2013, data = reg.df)
+table.num <- table.num +1
+kable(round(summary(fit.2)$coef,4)) #Только таблица с коэффициентами
+```
+
+## Исколючаем из модели второй наименее значимый фактор USEPC.2014
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Исколючаем из модели второй наименее значимый фактор USEPC.2014
+fit.X1 <- lm(ORT.2014 ~ KMP.2014 + Budg.2013, data = reg.df)
+table.num <- table.num +1
+kable(round(summary(fit.X1)$coef,4))
+```
+
+## Включим в модель фиктивные переменные
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Модель с переменной структурой
+fit.X1.fo <- lm(ORT.2014 ~ KMP.2014*FO + Budg.2013*FO, data = reg.df)
+table.num <- table.num +1
+kable(round(summary(fit.X1.fo)$coef,4))
+```
+
+
+
+
+```{r, echo = FALSE}
+#Создаем фрейм со всеми переменными-факторами (создаем фиктивные)
+X.matrix <- model.matrix(ORT.2014 ~ KMP.2014*FO + Budg.2013*FO, data = reg.df)
+#Присоединяем независимую переменную
+data.fit <- cbind(ORT.2014 = reg.df$ORT.2014, data.frame(X.matrix)[, -1])
+```
+
+## Воспользуемся пользовательской функцией для исключения незначимых параметров
+### Сравним методы применения данной функции
+### Метод Бонферрони:
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+source('https://raw.githubusercontent.com/aksyuk/R-Practice-basics/master/user_functions/removeFactorsByPValue.R') #Функция с последовательным исключением аномальных
+#доводим до значимости
+table.num <- table.num +1
+fit.X1.fo1 <- removeFactorsByPValue(data = data.fit, y.var.name = 'ORT.2014', p.adj.method = 'bonferroni')
+kable(round(summary(fit.X1.fo1)$coef, 4))
+pander(list('Доля дисперсии', summary(fit.X1.fo1)$adj.r.squared))
+```
+
+### Исключение параметров без поправки:
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#доводим до значимости
+fit.X1.fo2 <- removeFactorsByPValue(data = data.fit, y.var.name = 'ORT.2014')
+kable(round(summary(fit.X1.fo2)$coef, 4))
+pander(list('Доля дисперсии', summary(fit.X1.fo2)$adj.r.squared))
+table.num <- table.num +1
+```
+
+
+# Сравнение нескольких моделей по качеству
+
+```{r, echo = FALSE}
+anova(fit.X1, fit.X1.fo, fit.X1.fo1, fit.X1.fo2)
+```
+
+## Составим таблицу характеристик качества построенных моделей
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Составим таблицу характеристик качества построенных моделей
+models.list <- list(fit.X1, fit.X1.fo, fit.X1.fo1, fit.X1.fo2)
+names(models.list) <- c('fit.X1', 'fit.X1.fo', 'fit.X1.fo1', 'fit.X1.fo2')
+df.goodones.of.fit <- data.frame(Модель = names(models.list),
+                                 R.2.скорр = rep(0, length(models.list)),
+                                 F.расч = rep(0,length(models.list)),
+                                 Станд.Ошибка = rep(0,length(models.list)))
+
+for (i in 1:length(models.list)){
+  df.goodones.of.fit[i,'R.2.скорр'] <- round(summary(models.list[[i]])$adj.r.squared, 3) #Скорректированный R-квадрат
+  df.goodones.of.fit[i,'F.расч'] <- round(summary(models.list[[i]])$fstatistic[1], 2) #F-расчетное
+  df.goodones.of.fit[i,'Станд.Ошибка'] <- round(summary(models.list[[i]])$sigma, 1) #Стандартная ошибка
+}
+
+kable(df.goodones.of.fit)
+table.num <- table.num +1
+```
+
+
+
+# Проделаем аналогичную работу над логарифмированными данными:
+
+```{r, echo = FALSE}
+reg.df1 <- cbind(reg.df$FO,log(reg.df[,2:6]))
+colnames(reg.df1)<- colnames(reg.df)
+```
+
+## Выполним оценку параметров модели линейной регрессии
+#### Таблица № `r table.num `
+```{r, echo = FALSE} 
+#Оценка параметров модели линейной регрессии
+fit.1log <- lm(ORT.2014 ~ KMP.2014 + USEPC.2014 + Budg.2013 + RDD.2014, data = reg.df1)
+kable(round(summary(fit.1log)$coef,4))
+table.num <- table.num +1
+```
+
+## Исколючаем из модели наименее значимый фактор RDD.2014
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Исколючаем из модели наименее значимый фактор RDD.2014
+fit.2log <- lm(ORT.2014 ~ KMP.2014 + USEPC.2014 + Budg.2013, data = reg.df1)
+kable(round(summary(fit.2log)$coef,4)) #Только таблица с коэффициентами
+table.num <- table.num +1
+```
+
+## Исколючаем из модели второй наименее значимый фактор USEPC.2014
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Исколючаем из модели второй наименее значимый фактор USEPC.2014
+fit.X1log <- lm(ORT.2014 ~ KMP.2014 + Budg.2013, data = reg.df1)
+kable(round(summary(fit.X1log)$coef,4))
+table.num <- table.num +1
+```
+
+## Включим в модель фиктивные переменные
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Модель с переменной структурой
+fit.X1log.fo <- lm(ORT.2014 ~ KMP.2014*FO + Budg.2013*FO, data = reg.df1)
+kable(round(summary(fit.X1log.fo)$coef,4))
+table.num <- table.num +1
+```
+
+```{r, echo = FALSE}
+#Создаем фрейм со всеми переменными-факторами (создаем фиктивные)
+X.matrix.log <- model.matrix(ORT.2014 ~ KMP.2014*FO + Budg.2013*FO, data = reg.df1)
+#Присоединяем независимую переменную
+data.fit.log <- cbind(ORT.2014 = reg.df$ORT.2014, data.frame(X.matrix.log)[, -1])
+```
+
+## Воспользуемся пользовательской функцией для исключения незначимых параметров
+### Сравним методы применения данной функции
+### Метод Бонферрони:
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#доводим до значимости
+fit.X1log.fo1 <- removeFactorsByPValue(data = data.fit.log, y.var.name = 'ORT.2014', p.adj.method = 'bonferroni')
+kable(round(summary(fit.X1log.fo1)$coef, 4))
+pander(list('Доля дисперсии', summary(fit.X1log.fo1)$adj.r.squared))
+table.num <- table.num +1
+```
+
+### Исключение параметров без поправки:
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#доводим до значимости
+fit.X1log.fo2 <- removeFactorsByPValue(data = data.fit.log, y.var.name = 'ORT.2014')
+kable(round(summary(fit.X1log.fo2)$coef, 4))
+pander(list('Доля дисперсии', summary(fit.X1log.fo2)$adj.r.squared))
+table.num <- table.num +1
+```
+
+
+# Сравним модели на логарифмированных данных и на обычных
+
+```{r, echo = FALSE}
+anova(fit.X1, fit.X1.fo, fit.X1.fo1, fit.X1.fo2, fit.X1log, fit.X1log.fo, fit.X1log.fo1, fit.X1log.fo2)
+```
+
+## Составим таблицу характеристик качества построенных моделей
+#### Таблица № `r table.num `
+```{r, echo = FALSE}
+#Составим таблицу характеристик качества построенных моделей
+models.list.log <- list(fit.X1, fit.X1.fo, fit.X1.fo1, fit.X1.fo2, fit.X1log, fit.X1log.fo, fit.X1log.fo1, fit.X1log.fo2)
+names(models.list.log) <- c('fit.X1', 'fit.X1.fo', 'fit.X1.fo1', 'fit.X1.fo2', 'fit.X1log', 'fit.X1log.fo', 'fit.X1log.fo1', 'fit.X1log.fo2')
+df.goodones.of.fit.log <- data.frame(Модель = names(models.list.log),
+                                 R.2.скорр = rep(0, length(models.list.log)),
+                                 F.расч = rep(0,length(models.list.log)),
+                                 Станд.Ошибка = rep(0,length(models.list.log)))
+
+for (i in 1:length(models.list.log)){
+  df.goodones.of.fit.log[i,'R.2.скорр'] <- round(summary(models.list.log[[i]])$adj.r.squared, 3) #Скорректированный R-квадрат
+  df.goodones.of.fit.log[i,'F.расч'] <- round(summary(models.list.log[[i]])$fstatistic[1], 2) #F-расчетное
+  df.goodones.of.fit.log[i,'Станд.Ошибка'] <- round(summary(models.list.log[[i]])$sigma, 1) #Стандартная ошибка
+}
+
+kable(df.goodones.of.fit.log)
+```
+### Результат: 
+
+По столбцу $R^2$ больше всего подходит четвертая модель $R^2=0,759$, а именно без поправок по методу Бонферонни;
+
+По столбцу F.расч - первая $F=47,49$; 
+
+Выберем лучшую модель по $R^2$
+
+Явный вид модели $ORT.2014 = 74529 +562*KMP.2014 +0.1511*BUDG.2013$
+
+```{r, echo = FALSE}
+#чистим рабочее пространство
+rm(i, df.goodones.of.fit, data.fit, X.matrix, fit.1, fit.2, fit.X1, fit.X1.fo, df.goodones.of.fit.log, data.fit.log, X.matrix.log, fit.1log, fit.2log, fit.X1log, fit.X1log.fo, fit.X1log.fo1, fit.X1log.fo2, fit.X1.fo1, fit.X1.fo2, removeFactorsByPValue, table.num)
+```
+
+```{r, echo = FALSE}
+#Сохранение рабочего пространства
+save.image('labs_ЛюдуховскийВВ_models.RData')
+```
+
+
+
+
+
+
