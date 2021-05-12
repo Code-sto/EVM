@@ -1,0 +1,166 @@
+---
+title: "Упражнение 8"
+author: "Людуховский В.В."
+date: "10 05 2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+Задания Для каждой модели:
+1. Указать настроечные параметры метода из своего варианта (например: количество узлов, количество предикторов, скорость обучения).
+2. Подогнать модель на обучающей выборке (50% наблюдений). Рассчитать MSE на тестовой выборке.
+3. Перестроить модель с помощью метода, указанного в варианте.
+4. Сделать прогноз по модели с подобранными в п.3 параметрами на тестовой выборке, оценить его точность и построить график «прогноз-реализация».
+
+Вариант 18
+Данные *Carseats{ISLR}*
+
+Непрерывный Y = *Sales*
+Объясняющие переменные - все остальные
+Метод подгонки полей бэггинг
+```{r setup, include=FALSE}
+library('knitr')
+library('tree')              # деревья tree()
+library('ISLR')              # набор данных Carseats
+library('GGally')            # матричный график разброса ggpairs()
+library('MASS')              # набор данных Boston
+library('randomForest')      # случайный лес randomForest()
+library('gbm')               # бустинг gbm()
+
+
+knitr::opts_chunk$set(echo = TRUE)
+
+my.seed <- 18
+set.seed(my.seed)
+```
+
+
+```{r}
+attach(Carseats)
+data('Carseats')
+detach(Carseats)
+```
+
+```{r}
+#Новая переменная
+High <- ifelse(Carseats$Sales <= 9.3, "no", "yes")
+Carseats <- cbind(Carseats, High)
+Carseats$High <- as.factor(Carseats$High)
+#Матричные графики разброса переменных
+p <- ggpairs(Carseats[, c(12, 1:4)], aes(color = High))
+suppressMessages(print(p))
+p <- ggpairs(Carseats[, c(12, 5:8)], aes(color = High))
+suppressMessages(print(p))
+p <- ggpairs(Carseats[, c(12, 9:11)], aes(color = High))
+suppressMessages(print(p))
+                 
+```
+Судя по графикам, переменная классы No и Yes переменной High сопоставимы по размерам. Классы на графиках разброса объясняющих переменных сильно смешаны, поэтому модели с непрерывной разрешающей границей вряд ли сработают хорошо. Построим дерево для категориального отклика High, отбросив непрерывный отклик Sales (мы оставили его на первом графике, чтобы проверить, как сработало разделение по значению Sales = 9.3).
+
+```{r}
+tree.carseats2 <- tree(High ~ . -Sales, data = Carseats)
+tree.carseats1 <- tree(Sales ~ ., data = Carseats)
+summary(tree.carseats1)
+summary(tree.carseats2)
+```
+
+```{r}
+plot(tree.carseats1)
+text(tree.carseats1)
+plot(tree.carseats2)
+text(tree.carseats2)
+```
+
+Теперь построим дерево на обучающей выборке и оценим ошибку на тестовой.
+
+```{r}
+set.seed(my.seed)
+
+# обучающая выборка (50%)
+train <- sample(1:nrow(Carseats), 200)
+
+# тестовая выборка
+Carseats.test <- Carseats[-train,]
+High.test <- High[-train]
+
+# строим дерево на обучающей выборке
+tree.carseats2 <- tree(High ~ . -Sales, Carseats, subset = train)
+tree.carseats1 <- tree(Sales ~., Carseats, subset = train)
+
+# делаем прогноз
+tree.pred1 <- predict(tree.carseats1, Carseats.test)
+tree.pred2 <- predict(tree.carseats2, Carseats.test, type = "class")
+
+#MSE
+mse.test <- mean((tree.pred1 - Carseats.test$Sales)^2)
+names(mse.test)[length(mse.test)] <- 'Carseats1.test.tree'
+mse.test
+
+# матрица неточностей
+tbl <- table(tree.pred2, High.test)
+tbl
+```
+
+```{r}
+acc.test <- sum(diag(tbl))/sum(tbl)
+names(acc.test)[length(acc.test)] <- 'Carseats.class.tree.all'
+acc.test
+```
+Обобщённая характеристика точности: доля верных прогнозов: 0.81.
+
+
+# Бэггинг
+```{r}
+set.seed(my.seed)
+bag.Carseats1 <- randomForest(Sales ~ ., data = Carseats, subset = train, 
+                           mtry = 11, importance = TRUE)
+bag.Carseats1
+```
+
+```{r}
+set.seed(my.seed)
+bag.Carseats2 <- randomForest(High ~ . - Sales, data = Carseats, subset = train, 
+                           mtry = 10, importance = TRUE)
+bag.Carseats2
+```
+Обобщённая характеристика точности после беггинга: доля верных прогнозов: 0.88.
+
+# Прогнозы по моделям
+
+## Прогноз по первой модели для непрерывного Y
+```{r}
+# прогноз
+yhat.bag1 = predict(bag.Carseats1, newdata = Carseats[-train, ])
+
+# график "прогноз -- реализация"
+plot(yhat.bag1, Carseats.test$Sales)
+# линия идеального прогноза
+abline(0, 1)
+```
+
+```{r}
+# MSE на тестовой
+mse.test <- mean((yhat.bag1 - Carseats.test$Sales)^2)
+names(mse.test)[length(mse.test)] <- 'Carseats.bag.11'
+mse.test
+```
+
+## Прогноз для второй модели для Категориального Y
+
+
+```{r}
+# прогноз
+yhat.bag2 = predict(bag.Carseats2, newdata = Carseats[-train, ])
+
+# график "прогноз -- реализация"
+plot(yhat.bag2, Carseats.test$Sales)
+# линия идеального прогноза
+abline(0, 1)
+```
+
+```{r}
+bag.Carseats2
+```
+
+Обобщённая характеристика точности после беггинга: доля верных прогнозов: 0.88
